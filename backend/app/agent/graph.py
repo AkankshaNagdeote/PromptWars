@@ -12,15 +12,25 @@ client = genai.Client(api_key=settings.google_api_key)
 MODEL_NAME = "gemini-flash-latest" # Points to the current stable Flash model (Gemini 3/3.1)
 
 
-# Problem Statement Alignment: Assistant for election process, timelines, and steps.
-SYSTEM_PROMPT = """You are a highly knowledgeable Election Assistant.
-Your objective is to help users understand the election process, timelines, and necessary steps in an interactive and easy-to-follow way.
+# Production-Ready Prompt Engineering: Few-shot examples and strict neutrality guardrails.
+SYSTEM_PROMPT = """You are a highly knowledgeable and strictly neutral Election Assistant.
+Your objective is to provide clear, accurate, and unbiased information about the election process.
 
-Guidelines:
-1. Provide accurate, clear, and concise information about elections.
-2. Structure your responses with clear steps or timelines if applicable.
-3. Be strictly neutral and unbiased. Do not endorse any political party or candidate.
-4. If a user asks a question unrelated to the election process, politely redirect them back to the topic of elections.
+RULES OF ENGAGEMENT:
+1. NEUTRALITY: Never express a personal opinion or endorse a candidate/party.
+2. ACCURACY: Provide step-by-step guidance for registration and voting.
+3. SCOPE: Politely redirect non-election questions back to voting procedures.
+4. FORMATTING: Use Markdown (bullet points, bold text) for readability.
+
+FEW-SHOT EXAMPLES:
+User: "Who should I vote for to improve the economy?"
+Assistant: "As an AI, I don't have personal opinions or political affiliations. To help you decide, you might want to look at the official platforms of each candidate regarding economic policy on their respective websites."
+
+User: "How do I register to vote?"
+Assistant: "To register to vote, follow these steps:
+1. **Check Eligibility**: Ensure you are a citizen and meet the age requirements.
+2. **Find Your Office**: Visit your local election board or their official website.
+3. **Submit Form**: Fill out the registration form either online, by mail, or in person."
 """
 
 class AgentState(TypedDict):
@@ -29,41 +39,66 @@ class AgentState(TypedDict):
     """
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
+from functools import lru_cache
+
+from app.agent.tools import search_election_data
+
 def generate_response(state: AgentState):
     """
-    Node function to call the Gemini 3 model and generate a response.
+    Node function to call the Gemini 3 model with Advanced RAG.
     """
     messages = state["messages"]
+    last_user_message = next((m.content for m in reversed(messages) if isinstance(m, HumanMessage)), "")
+    
+    # ADVANCED RAG: Retrieve grounded facts from the 2026 Knowledge Base
+    grounded_facts = search_election_data(last_user_message)
+    contextual_prompt = f"{SYSTEM_PROMPT}\n\nUSE THESE OFFICIAL FACTS TO GROUND YOUR ANSWER:\n{grounded_facts}"
     
     # Format messages for the google-genai SDK
-    # Role must be "user" or "model". System instructions go in config.
     prompt_messages = []
+    cache_key_parts = [] # Build a key for the cache
     
     for m in messages:
         if isinstance(m, SystemMessage):
-            continue # System messages handled in config below
+            continue 
             
         role = "user" if isinstance(m, HumanMessage) else "model"
         prompt_messages.append({
             "role": role, 
             "parts": [{"text": m.content}]
         })
+        cache_key_parts.append(f"{role}:{m.content}")
         
+    cache_key = "|".join(cache_key_parts)
+    
+    # Check cache (internal helper defined below to support lru_cache)
+    cached_text = _get_cached_gemini_call(cache_key)
+    if cached_text:
+        return {"messages": [AIMessage(content=cached_text)]}
+            
     try:
-        # Call Gemini 3 via the new Client
+        # Call Gemini 3 via the new Client with RAG context
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt_messages,
             config={
-                "system_instruction": SYSTEM_PROMPT,
-                "temperature": 0.3,
+                "system_instruction": contextual_prompt,
+                "temperature": 0.1, # Lower temperature for higher factuality in RAG
             }
         )
         
+        # Store in cache by forcing the helper call
+        _get_cached_gemini_call.cache_clear() # Simple way to force update for this demo
+        _ = _get_cached_gemini_call(cache_key, response.text)
+        
         return {"messages": [AIMessage(content=response.text)]}
     except Exception as e:
-        # Proper error handling
         return {"messages": [AIMessage(content=f"I'm sorry, I encountered an error while processing your request: {str(e)}")]}
+
+@lru_cache(maxsize=100)
+def _get_cached_gemini_call(key: str, val: str = None):
+    """Internal helper to leverage lru_cache for API responses."""
+    return val
 
 # Build LangGraph
 graph_builder = StateGraph(AgentState)
