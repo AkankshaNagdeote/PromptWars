@@ -77,13 +77,20 @@ def generate_response(state: AgentState):
         return {"messages": [AIMessage(content=cached_text)]}
             
     try:
-        # Call Gemini 3 via the new Client with RAG context
+        # Call Gemini 3 with RAG, Search Grounding, and VERTEX SAFETY SETTINGS
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt_messages,
             config={
                 "system_instruction": contextual_prompt,
-                "temperature": 0.1, # Lower temperature for higher factuality in RAG
+                "temperature": 0.1,
+                "tools": [{"google_search": {}}],
+                "safety_settings": [
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"}
+                ]
             }
         )
         

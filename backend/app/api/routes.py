@@ -4,19 +4,17 @@ from app.models.schemas import ChatRequest, ChatResponse
 from app.agent.graph import app_graph
 from langchain_core.messages import HumanMessage
 
-router = APIRouter()
-logger = logging.getLogger(__name__)
+from app.core.security import rate_limiter, StructuredLogger
 
-# Simple in-memory store for session histories (for hackathon efficiency)
-# In production, use Redis or a database checkpointer in LangGraph
+router = APIRouter()
 sessions = {}
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(rate_limiter)])
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
     """
     Main chat endpoint to interact with the Election Assistant agent.
     """
-    logger.info(f"Received chat request for session {request.session_id}")
+    StructuredLogger.info(f"Received chat request for session {request.session_id}")
     
     try:
         # Initialize session state if it doesn't exist
@@ -40,5 +38,5 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
             session_id=request.session_id
         )
     except Exception as e:
-        logger.error(f"Error processing chat: {e}", exc_info=True)
+        StructuredLogger.error(f"Error processing chat: {e}")
         raise HTTPException(status_code=500, detail="Internal server error while processing the request.")

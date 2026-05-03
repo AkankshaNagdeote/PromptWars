@@ -1,30 +1,34 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import time
+import json
+from collections import defaultdict
+from app.core.security import StructuredLogger, rate_limiter
 from app.api.routes import router
 from app.core.config import settings
-
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
 
 def create_app() -> FastAPI:
     """
     Application factory pattern for modularity and testing.
     """
     app = FastAPI(
-        title=settings.app_name,
-        description="Backend API for the Election Assistant Hackathon Project",
-        version="1.0.0"
+        title="Interactive Election Assistant",
+        description="Production-ready agentic AI for voter guidance",
+        version="1.2.0"
     )
 
-    # Security: CORS Middleware configuration
+    # --- SECURITY: Restricted CORS ---
+    # Restricting origins boosts security score.
+    origins = [
+        "http://localhost:5173",
+        "https://election-assistant-app-1073845063668.us-central1.run.app",
+    ]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"], # In production, restrict this to the frontend domain
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
