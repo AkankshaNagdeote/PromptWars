@@ -36,8 +36,8 @@ export default function ChatInterface() {
     setIsLoading(true);
 
     try {
-      // Use the live Cloud Run URL for production
-      const BASE_URL = "https://election-assistant-api-1073845063668.us-central1.run.app";
+      // Use a relative path since we are now hosted on the same service link
+      const BASE_URL = "";
       const response = await axios.post(`${BASE_URL}/api/chat`, {
         message: userMessage.content,
         session_id: 'default_hackathon_session'
