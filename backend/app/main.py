@@ -1,6 +1,6 @@
 import logging
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api.routes import router
 from app.core.config import settings
 
@@ -32,14 +32,15 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(router, prefix="/api")
 
-    @app.get("/")
-    async def root():
-        """Welcome message for the root path."""
-        return {
-            "message": "Welcome to the Interactive Election Assistant API",
-            "status": "online",
-            "documentation": "/docs"
-        }
+    # Serve static files (React Frontend)
+    # This must be after the API routes
+    try:
+        app.mount("/", StaticFiles(directory="static", html=True), name="static")
+    except Exception:
+        # Fallback if static folder doesn't exist yet
+        @app.get("/")
+        async def root():
+            return {"message": "API is online. Frontend not yet built."}
 
     @app.get("/health")
     async def health_check():
