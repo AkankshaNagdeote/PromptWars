@@ -32,6 +32,15 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(router, prefix="/api")
 
+    @app.get("/")
+    async def root():
+        """Welcome message for the root path."""
+        return {
+            "message": "Welcome to the Interactive Election Assistant API",
+            "status": "online",
+            "documentation": "/docs"
+        }
+
     @app.get("/health")
     async def health_check():
         """Efficiency & testing check endpoint."""
