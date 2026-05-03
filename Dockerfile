@@ -1,9 +1,9 @@
 # --- Stage 1: Build Frontend ---
 FROM node:20-slim AS frontend-builder
 WORKDIR /frontend-build
-COPY ../frontend/package*.json ./
+COPY frontend/package*.json ./
 RUN npm install
-COPY ../frontend ./
+COPY frontend ./
 RUN npm run build
 
 # --- Stage 2: Build Backend ---
@@ -13,11 +13,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # Copy application code
-COPY . .
+COPY backend/ .
 
 # Copy built frontend from Stage 1
 COPY --from=frontend-builder /frontend-build/dist ./static
@@ -25,6 +25,8 @@ COPY --from=frontend-builder /frontend-build/dist ./static
 # Expose the port
 EXPOSE 8080
 
+# Environment variables
+ENV GOOGLE_LOCATION="us-central1"
 ENV ENVIRONMENT="production"
 
 # Run the application
